@@ -8,13 +8,24 @@
         .container { max-width: 800px; margin: 0 auto; }
         h1, h2 { color: #2c3e50; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        
+        /* КНОПКИ И ЭФФЕКТЫ ТЕМНЕНИЯ ПРИ НАВЕДЕНИИ */
         button { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.2s; }
-        button:hover { background: #2980b9; }
+        button:hover { background: #2980b9; } /* Синяя кнопка темнеет */
+        
+        .btn-reg { background: #2ecc71 !important; }
+        .btn-reg:hover { background: #27ae60 !important; } /* ЗЕЛЕНАЯ КНОПКА ТЕПЕРЬ ТОЖЕ ТЕМНЕЕТ! */
+        
+        .btn-pay { background: #2ecc71; padding: 10px 15px; font-size: 14px; }
+        .btn-pay:hover { background: #27ae60; }
+        
         .btn-take { background: #2ecc71; font-size: 14px; padding: 8px 15px; float: right; margin-top: -10px; }
         .btn-take:hover { background: #27ae60; }
         .btn-complete { background: #e67e22; font-size: 14px; padding: 6px 12px; float: right; margin-top: -10px; }
         .btn-complete:hover { background: #d35400; }
         .btn-chat { background: #9b59b6; font-size: 14px; padding: 6px 12px; float: right; margin-top: -10px; margin-right: 5px; }
+        .btn-chat:hover { background: #8e44ad; }
+        
         input, textarea { width: 100%; padding: 10px; margin: 8px 0 15px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
         .task-item { background: #fdfdfd; border-left: 5px solid #3498db; padding: 15px; margin-bottom: 15px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); overflow: hidden; }
         .price-tag { display: inline-block; background: #e74c3c; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 14px; }
@@ -61,7 +72,17 @@
             <p><strong>Ваш публичный ник:</strong> <span id="user-name"></span></p>
             <p><strong>Ваш ID на сайте:</strong> <span id="user-id"></span></p>
             <p><strong>Ваш баланс:</strong> <span id="user-balance"></span> руб.</p>
-            <button onclick="logout()" style="background: #e74c3c; font-size: 12px; padding: 5px 10px; margin-top: 5px;">Выйти из аккаунта</button>
+            
+            <!-- БЛОК НАСТОЯЩЕЙ ОПЛАТЫ -->
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #bee5eb;">
+                <label style="font-size: 14px; font-weight: bold; color: #2c3e50;">Пополнение кошелька реальными деньгами:</label>
+                <div style="display: flex; gap: 10px; margin-top: 5px;">
+                    <input type="number" id="pay-amount" value="100" min="10" style="margin: 0; width: 120px;" placeholder="Сумма (руб)">
+                    <button class="btn-pay" onclick="initiateRealPayment()">Пополнить через СБП / Карту</button>
+                </div>
+            </div>
+
+            <button onclick="logout()" style="background: #e74c3c; font-size: 12px; padding: 5px 10px; margin-top: 15px;">Выйти из аккаунта</button>
         </div>
     </div>
 
@@ -95,10 +116,7 @@
         </div>
     </div>
 </div>
-
-
 <script>
-    // ТУТ СТОИТ ВАША ОФИЦИАЛЬНАЯ ИНТЕРНЕТ-ССЫЛКА
     var SERVER_URL = 'https://onrender.com';
     var currentUserId = null;
     var currentTab = 'all';
@@ -152,8 +170,8 @@
         btnIn.onclick = function() { handleAuth('login'); };
         
         var btnReg = document.createElement('button');
+        btnReg.className = 'btn-reg'; // Добавили класс для эффекта hover
         btnReg.innerText = 'Создать аккаунт';
-        btnReg.style.background = '#2ecc71';
         btnReg.onclick = function() { handleAuth('register'); };
 
         var linkForgot = document.createElement('a');
@@ -246,18 +264,13 @@
         clearInterval(chatInterval);
         loadTasks();
     }
-
-
-    // 1. ЗАПРОС КОДА ВОССТАНОВЛЕНИЯ (ГАРАНТИРОВАННОЕ ПЕРЕКЛЮЧЕНИЕ ОКНА)
     async function requestResetCode() {
         var loginVal = document.getElementById('forgot-user-login').value.trim();
         var emailVal = document.getElementById('forgot-email').value.trim();
-        
         if (loginVal.length < 3 || emailVal.length < 5) {
             alert('Заполните логин (от 3 символов) и корректный Email!');
             return;
         }
-
         try {
             var response = await fetch(SERVER_URL + '/api/forgot-password', {
                 method: 'POST',
@@ -269,29 +282,23 @@
         } catch (err) {
             alert('Запрос отправлен! Проверяйте почтовый ящик.');
         }
-        
-        // Окна переключатся в любом случае для ввода кода из PyCharm или Mail.ru:
         document.getElementById('forgot-step1').style.display = 'none';
         document.getElementById('forgot-step2').style.display = 'block';
     }
 
-    // 2. ОТПРАВКА НОВОГО ПАРОЛЯ И КОДА СБРОСА
     async function submitNewPassword() {
         var emailVal = document.getElementById('forgot-email').value.trim();
         var codeVal = document.getElementById('forgot-code').value.trim();
         var newPassVal = document.getElementById('forgot-new-password').value.trim();
-
         if (codeVal.length < 5 || newPassVal.length < 4) {
             alert('Введите код подтверждения и новый пароль (от 4 символов)!');
             return;
         }
-
         var response = await fetch(SERVER_URL + '/api/reset-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: emailVal, code: codeVal, new_password: newPassVal })
         });
-
         var data = await response.json();
         if (response.ok) {
             alert(data.message);
@@ -310,16 +317,13 @@
     async function loadTasks() {
         if (!currentUserId) return;
         await updateBalanceOnScreen();
-        
         var url = SERVER_URL + '/api/tasks';
         if (currentTab === 'created') url = SERVER_URL + '/api/tasks/my-created/' + currentUserId;
         if (currentTab === 'jobs') url = SERVER_URL + '/api/tasks/my-jobs/' + currentUserId;
-
         var response = await fetch(url);
         var tasks = await response.json();
         var container = document.getElementById('tasks-container');
         container.innerHTML = '';
-
         if (tasks.length === 0) {
             var noDataMsg = document.createElement('p');
             noDataMsg.style.color = '#95a5a6';
@@ -327,11 +331,9 @@
             container.appendChild(noDataMsg);
             return;
         }
-
         tasks.forEach(function(task) {
             var item = document.createElement('div');
             item.className = 'task-item';
-            
             if (currentTab === 'all') {
                 var btnTake = document.createElement('button');
                 btnTake.className = 'btn-take';
@@ -345,7 +347,6 @@
                     btnComplete.innerText = 'Подтвердить';
                     btnComplete.onclick = function() { completeTask(task.id); };
                     item.appendChild(btnComplete);
-
                     var btnChat = document.createElement('button');
                     btnChat.className = 'btn-chat';
                     btnChat.innerText = 'Чат';
@@ -364,39 +365,31 @@
                 btnOpenChat.onclick = function() { openChat(task.id, task.title); };
                 item.appendChild(btnOpenChat);
             }
-
             var h3 = document.createElement('h3');
             h3.innerText = task.title;
             item.appendChild(h3);
-
             var pDesc = document.createElement('p');
             pDesc.innerText = task.description;
             item.appendChild(pDesc);
-
             var pAuthor = document.createElement('p');
             var smallAuthor = document.createElement('small');
             smallAuthor.innerText = 'Автор: 👥 ' + task.student_name;
             pAuthor.appendChild(smallAuthor);
             item.appendChild(pAuthor);
-
             var priceDiv = document.createElement('div');
             priceDiv.className = 'price-tag';
             priceDiv.innerText = 'Бюджет: ' + task.full_price + ' руб.';
             item.appendChild(priceDiv);
-                             
             container.appendChild(item);
         });
     }
-
     function openChat(taskId, taskTitle) {
         activeTaskId = taskId;
         document.getElementById('chat-title').innerText = '💬 Анонимный чат по задаче: "' + taskTitle + '"';
         document.getElementById('chat-section').style.display = 'block';
-        
         var container = document.getElementById('chat-messages');
         container.innerHTML = '';
         loadedMessagesCount = 0;
-        
         loadMessages();
         clearInterval(chatInterval);
         chatInterval = setInterval(loadMessages, 3000);
@@ -406,24 +399,18 @@
         if (!activeTaskId) return;
         var response = await fetch(SERVER_URL + '/api/tasks/' + activeTaskId + '/messages?user_id=' + currentUserId);
         if (!response.ok) return;
-        
         var messages = await response.json();
         var container = document.getElementById('chat-messages');
-        
         if (messages.length === loadedMessagesCount) return;
-
         var newMessages = messages.slice(loadedMessagesCount);
-        
         newMessages.forEach(function(msg) {
             var div = document.createElement('div');
             var isWorker = msg.role.indexOf('Исполнитель') !== -1;
             div.className = 'msg ' + (isWorker ? 'worker' : '');
-            
             var textWithLinks = msg.text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color: #fff; font-weight: bold;">$1</a>');
             div.innerHTML = '<strong>' + msg.role + ':</strong> ' + textWithLinks;
             container.appendChild(div);
         });
-
         loadedMessagesCount = messages.length;
         container.scrollTop = container.scrollHeight;
     }
@@ -432,17 +419,12 @@
         var input = document.getElementById('chat-input');
         var text = input.value.trim();
         if (!text || !activeTaskId) return;
-
         var response = await fetch(SERVER_URL + '/api/tasks/' + activeTaskId + '/messages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ sender_id: currentUserId, text: text })
         });
-
-        if (response.ok) {
-            input.value = '';
-            loadMessages();
-        }
+        if (response.ok) { input.value = ''; loadMessages(); }
     }
 
     async function createTask() {
@@ -450,13 +432,11 @@
         var description = document.getElementById('task-desc').value;
         var price = parseFloat(document.getElementById('task-price').value);
         if (!title || !description) { alert('Заполните все поля!'); return; }
-
         var response = await fetch(SERVER_URL + '/api/tasks', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ student_id: currentUserId, title: title, description: description, price: price })
         });
-
         if (response.ok) {
             document.getElementById('task-title').value = '';
             document.getElementById('task-desc').value = '';
@@ -466,24 +446,36 @@
 
     async function takeTask(taskId) {
         var response = await fetch(SERVER_URL + '/api/tasks/' + taskId + '/take?worker_id=' + currentUserId, { method: 'POST' });
-        if (response.ok) {
-            alert('Вы успешно взяли задание!');
-            switchTab('jobs');
-        } else {
-            var data = await response.json();
-            alert('Ошибка: ' + data.detail);
-        }
+        if (response.ok) { alert('Вы успешно взяли задание!'); switchTab('jobs'); }
+        else { var data = await response.json(); alert('Ошибка: ' + data.detail); }
     }
 
     async function completeTask(taskId) {
         if (!confirm('Вы уверены, что всё решено верно? Деньги уйдут исполнителю.')) return;
         var response = await fetch(SERVER_URL + '/api/tasks/' + taskId + '/complete?student_id=' + currentUserId, { method: 'POST' });
-        if (response.ok) {
-            alert('Сделка завершена!');
-            switchTab('created');
+        if (response.ok) { alert('Сделка завершена!'); switchTab('created'); }
+    }
+
+    // ТЕСТОВОЕ ПОПОЛНЕНИЕ КОШЕЛЬКА (НАЧИСЛЯЕТ БАЛАНС СРАЗУ!)
+    async function initiateRealPayment() {
+        var amountVal = parseFloat(document.getElementById('pay-amount').value);
+        if (isNaN(amountVal) || amountVal < 10) {
+            alert('Минимальная сумма пополнения — 10 рублей!');
+            return;
+        }
+        
+        // Для тестов на бесплатном хостинге мы стучимся на специальный обработчик, который сразу даст деньги!
+        try {
+            var response = await fetch(SERVER_URL + '/api/payments/test-add?user_id=' + currentUserId + '&amount=' + amountVal, {
+                method: 'POST'
+            });
+            var data = await response.json();
+            alert(data.message);
+            await updateBalanceOnScreen();
+        } catch (err) {
+            alert('Ошибка сети при пополнении баланса!');
         }
     }
 </script>
 </body>
 </html>
-
