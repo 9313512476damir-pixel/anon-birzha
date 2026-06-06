@@ -6,10 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from email.mime.text import MIMEText
 from email.header import Header
+from fastapi.responses import FileResponse
 
 app = FastAPI(
     title="Платформа анонимных заданий",
-    description="Бэкенд-система с повышенной защитой аккаунтов"
+    description="Бэкенд-система с полноценными аккаунтами"
 )
 
 app.add_middleware(
@@ -26,7 +27,7 @@ DB_NAME = "database.db"
 SMTP_SERVER = "smtp.mail.ru"
 SMTP_PORT = 465
 SENDER_EMAIL = "anon.birzha@mail.ru"
-SENDER_PASSWORD = "GEEBWjsT1XYRn34fS2kw"
+SENDER_PASSWORD = "lr6HlpEd8tBQmDbAbgYt"
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -88,7 +89,6 @@ class UserLogin(BaseModel):
     login: str
     password: str
 
-# ОБНОВЛЕННАЯ СХЕМА: ТЕПЕРЬ ТРЕБУЕТСЯ И ЛОГИН, И EMAIL
 class ForgotPassword(BaseModel):
     login: str
     email: str
@@ -108,55 +108,45 @@ class MessageSend(BaseModel):
     sender_id: int
     text: str = Field(..., min_length=1)
 
-#2
+# РАЗДАЧА ФАЙЛА ИНТЕРФЕЙСА САЙТА ДЛЯ ИНТЕРНЕТА
+@app.get("/")
+def read_root_index():
+    return FileResponse("index.html")
 
-# 1. РЕГИСТРАЦИЯ ПО ЛОГИНУ, ПАРОЛЮ И EMAIL
-@app.post("/api/forgot-password", tags=["Пользователи"])
-def forgot_password(data: ForgotPassword):
+@app.get("/index.html")
+def read_root_index_html():
+    return FileResponse("index.html")
+
+
+@app.post("/api/register", tags=["Пользователи"])
+def register_user(auth_data: UserRegister):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-
-    # Исправлено: запрашиваем username
-    cursor.execute("SELECT username FROM users WHERE login = ? AND email = ?", (data.login, data.email))
-    user = cursor.fetchone()
-    if not user:
+    cursor.execute("SELECT id FROM users WHERE login = ?", (auth_data.login,))
+    if cursor.fetchone():
         conn.close()
-        return {"message": "Если данные верны, код восстановления отправлен на вашу почту!"}
-
-    # ИСПРАВЛЕНИЕ: берем первый элемент из скобок [0], чтобы получить чистый текст никнейма
-    student_username = user[0]
-    secret_code = str(random.randint(100000, 999999))
-
-    cursor.execute("UPDATE users SET reset_code = ? WHERE login = ? AND email = ?",
-                   (secret_code, data.login, data.email))
+        raise HTTPException(status_code=400, detail="Этот логин уже занят!")
+    cursor.execute("SELECT id FROM users WHERE email = ?", (auth_data.email,))
+    if cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=400, detail="Пользователь с такой почтой уже есть!")
+    cursor.execute("SELECT COUNT(*) FROM users")
+    count = cursor.fetchone()
+    user_id = 100000 + count + 1
+    anonymous_name = f"Школьник #{random.randint(100000, 999999)}"
+    cursor.execute(
+        "INSERT INTO users (id, login, password, email, username, balance, reset_code) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (user_id, auth_data.login, auth_data.password, auth_data.email, anonymous_name, 0.0, None)
+    )
     conn.commit()
     conn.close()
+    return {"message": "Регистрация успешна! Ваш баланс: 0 руб.", "user": {"id": user_id, "username": anonymous_name, "balance": 0.0}}
 
-    subject = "🥷 Восстановление доступа | Анонимная Биржа"
-    body = f"Привет, {student_username}!\n\nТвой секретный код подтверждения для сброса пароля: {secret_code}\n\nВведи его на сайте."
-
-    msg = MIMEText(body, 'plain', 'utf-8')
-    msg['Subject'] = Header(subject, 'utf-8')
-    msg['From'] = SENDER_EMAIL
-    msg['To'] = data.email
-
-    try:
-        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
-            server.login(SENDER_EMAIL, SENDER_PASSWORD)
-            server.sendmail(SENDER_EMAIL, [data.email], msg.as_string())
-    except Exception as e:
-        print(f"Ошибка SMTP: {e}")
-
-    return {"message": "Код восстановления отправлен на вашу почту!"}
-
-
-# 2. ВХОД В АККАУНТ
 @app.post("/api/login", tags=["Пользователи"])
 def login_user(auth_data: UserLogin):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, username, balance FROM users WHERE login = ? AND password = ?",
-                   (auth_data.login, auth_data.password))
+    cursor.execute("SELECT id, username, balance FROM users WHERE login = ? AND password = ?", (auth_data.login, auth_data.password))
     user = cursor.fetchone()
     conn.close()
     if not user:
@@ -164,47 +154,39 @@ def login_user(auth_data: UserLogin):
     user_id, username, balance = user
     return {"message": "Вход выполнен успешно!", "user": {"id": user_id, "username": username, "balance": balance}}
 
-
-# 3. ЗАПРОС КОДА С ДВОЙНОЙ ПРОВЕРКОЙ (ЛОГИН + EMAIL)
 @app.post("/api/forgot-password", tags=["Пользователи"])
 def forgot_password(data: ForgotPassword):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-
-    # Проверяем, чтобы совпали И логин, И почта одновременно
     cursor.execute("SELECT username FROM users WHERE login = ? AND email = ?", (data.login, data.email))
     user = cursor.fetchone()
     if not user:
         conn.close()
-        # Специально пишем общую фразу, чтобы хакер не понял, угадал ли он хоть что-то
         return {"message": "Если данные верны, код восстановления отправлен на вашу почту!"}
-
+        
     student_username = user[0]
     secret_code = str(random.randint(100000, 999999))
-    cursor.execute("UPDATE users SET reset_code = ? WHERE login = ? AND email = ?",
-                   (secret_code, data.login, data.email))
+    cursor.execute("UPDATE users SET reset_code = ? WHERE login = ? AND email = ?", (secret_code, data.login, data.email))
     conn.commit()
     conn.close()
-
+    
     subject = "🥷 Восстановление доступа | Анонимная Биржа"
     body = f"Привет, {student_username}!\n\nТвой секретный код подтверждения для сброса пароля: {secret_code}\n\nВведи его на сайте."
-
+    
     msg = MIMEText(body, 'plain', 'utf-8')
     msg['Subject'] = Header(subject, 'utf-8')
     msg['From'] = SENDER_EMAIL
     msg['To'] = data.email
-
+    
     try:
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
             server.login(SENDER_EMAIL, SENDER_PASSWORD)
             server.sendmail(SENDER_EMAIL, [data.email], msg.as_string())
     except Exception as e:
         print(f"Ошибка SMTP: {e}")
-
+    
     return {"message": "Код восстановления отправлен на вашу почту!"}
 
-
-# 4. СБРОС СТАРОГО ПАРОЛЯ ПО КОДУ
 @app.post("/api/reset-password", tags=["Пользователи"])
 def reset_password(data: ResetPassword):
     conn = sqlite3.connect(DB_NAME)
@@ -219,8 +201,6 @@ def reset_password(data: ResetPassword):
     conn.close()
     return {"message": "Пароль успешно изменен! Теперь вы можете войти."}
 
-
-# 5. СОЗДАНИЕ ЗАДАНИЯ
 @app.post("/api/tasks", tags=["Задания"])
 def create_task(task_data: TaskCreate):
     conn = sqlite3.connect(DB_NAME)
@@ -241,16 +221,8 @@ def create_task(task_data: TaskCreate):
     cursor.execute('''
         INSERT INTO tasks (student_id, student_name, title, description, full_price, commission, worker_earnings, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'открыто')
-    ''', (task_data.student_id, student_name, task_data.title, task_data.description, task_data.price, commission,
-          worker_earnings))
-    conn.commit()
-    conn.close()
-    return {"message": "Задание создано!"}
-
-#3
-
-# 6. ПРОСМОТР ОТКРЫТЫХ ЗАДАНИЙ
-@app.get("/api/tasks", tags=["Задания"])
+    ''', (task_data.student_id, student_name, task_data.title, task_data.description, task_data.price, commission, worker_earnings))
+    conn.commit()@app.get("/api/tasks")
 def get_tasks():
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
@@ -260,8 +232,7 @@ def get_tasks():
     conn.close()
     return [dict(row) for row in rows]
 
-# 7. ИСПОЛНИТЕЛЬ БЕРЕТ ЗАДАНИЕ В РАБОТУ
-@app.post("/api/tasks/{task_id}/take", tags=["Задания"])
+@app.post("/api/tasks/{task_id}/take")
 def take_task(task_id: int, worker_id: int):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -286,8 +257,7 @@ def take_task(task_id: int, worker_id: int):
     conn.close()
     return {"message": "Вы успешно взяли задание в работу!"}
 
-# 8. ЗАВЕРШЕНИЕ СДЕЛКИ
-@app.post("/api/tasks/{task_id}/complete", tags=["Задания"])
+@app.post("/api/tasks/{task_id}/complete")
 def complete_task(task_id: int, student_id: int):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -310,8 +280,7 @@ def complete_task(task_id: int, student_id: int):
     conn.close()
     return {"message": "Задание успешно завершено!"}
 
-# 9. ОТПРАВИТЬ СООБЩЕНИЕ В ЧАТ
-@app.post("/api/tasks/{task_id}/messages", tags=["Чат"])
+@app.post("/api/tasks/{task_id}/messages")
 def send_message(task_id: int, msg: MessageSend):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -320,16 +289,12 @@ def send_message(task_id: int, msg: MessageSend):
     if not task:
         conn.close()
         raise HTTPException(status_code=404, detail="Задание не найдено")
-    if msg.sender_id != task and msg.sender_id != task:
-        conn.close()
-        raise HTTPException(status_code=403, detail="У вас нет доступа к этому чату")
     cursor.execute("INSERT INTO messages (task_id, sender_id, text) VALUES (?, ?, ?)", (task_id, msg.sender_id, msg.text))
     conn.commit()
     conn.close()
     return {"status": "Сообщение отправлено"}
 
-# 10. ПОЛУЧИТЬ ИСТОРИЮ ЧАТА
-@app.get("/api/tasks/{task_id}/messages", tags=["Чат"])
+@app.get("/api/tasks/{task_id}/messages")
 def get_messages(task_id: int, user_id: int):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -338,21 +303,17 @@ def get_messages(task_id: int, user_id: int):
     if not task:
         conn.close()
         raise HTTPException(status_code=404, detail="Задание не найдено")
-    if user_id != task and user_id != task:
-        conn.close()
-        raise HTTPException(status_code=403, detail="У вас нет доступа к этому чату")
     cursor.execute("SELECT sender_id, text, timestamp FROM messages WHERE task_id = ? ORDER BY id ASC", (task_id,))
     rows = cursor.fetchall()
     conn.close()
     chat_history = []
     for row in rows:
         sender_id, text, timestamp = row
-        role = "🥷 Заказчик" if sender_id == task else "🛠️ Исполнитель"
+        role = "🥷 Заказчик" if sender_id == task[0] else "🛠️ Исполнитель"
         chat_history.append({"role": role, "text": text, "time": timestamp})
     return chat_history
 
-# 11. ЛИЧНЫЙ КАБИНЕТ: Я ЗАКАЗАЛ
-@app.get("/api/tasks/my-created/{user_id}", tags=["Личный кабинет"])
+@app.get("/api/tasks/my-created/{user_id}")
 def get_my_created_tasks(user_id: int):
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
@@ -362,8 +323,7 @@ def get_my_created_tasks(user_id: int):
     conn.close()
     return [dict(row) for row in rows]
 
-# 12. ЛИЧНЫЙ КАБИНЕТ: Я ВЫПОЛНЯЮ
-@app.get("/api/tasks/my-jobs/{user_id}", tags=["Личный кабинет"])
+@app.get("/api/tasks/my-jobs/{user_id}")
 def get_my_jobs(user_id: int):
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
@@ -373,8 +333,7 @@ def get_my_jobs(user_id: int):
     conn.close()
     return [dict(row) for row in rows]
 
-# 13. УЗНАТЬ БАЛАНС
-@app.get("/api/users/{user_id}/balance", tags=["Пользователи"])
+@app.get("/api/users/{user_id}/balance")
 def get_user_balance(user_id: int):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -383,22 +342,15 @@ def get_user_balance(user_id: int):
     if not res:
         conn.close()
         raise HTTPException(status_code=404, detail="Пользователь не найден")
-    user_balance = res
+    user_balance = res[0]
     conn.close()
     return {"balance": user_balance, "admin_earnings": 0}
-
-# ДОПОЛНИТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ СВЯЗИ С INDEX.HTML В ИНТЕРНЕТЕ
-from fastapi.responses import FileResponse
-
-@app.get("/", tags=["Сайт"])
-def read_index():
-    return FileResponse("index.html")
-
-@app.get("/index.html", tags=["Сайт"])
-def read_index_html():
-    return FileResponse("index.html")
-
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8080)
+
+    conn.close()
+    return {"message": "Задание создано!"}
+
+
