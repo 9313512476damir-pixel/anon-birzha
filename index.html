@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Анонимная Биржа Заданий</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f6f9; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 800px; margin: 0 auto; }
+        h1, h2 { color: #2c3e50; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        button { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.2s; }
+        button:hover { background: #2980b9; }
+        .btn-take { background: #2ecc71; font-size: 14px; padding: 8px 15px; float: right; margin-top: -10px; }
+        .btn-take:hover { background: #27ae60; }
+        .btn-complete { background: #e67e22; font-size: 14px; padding: 6px 12px; float: right; margin-top: -10px; }
+        .btn-complete:hover { background: #d35400; }
+        .btn-chat { background: #9b59b6; font-size: 14px; padding: 6px 12px; float: right; margin-top: -10px; margin-right: 5px; }
+        input, textarea { width: 100%; padding: 10px; margin: 8px 0 15px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 15px; }
+        .task-item { background: #fdfdfd; border-left: 5px solid #3498db; padding: 15px; margin-bottom: 15px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); overflow: hidden; }
+        .price-tag { display: inline-block; background: #e74c3c; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 14px; }
+        .status-tag { display: inline-block; background: #f1c40f; color: #333; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; float: right; }
+        .user-info { background: #e8f4fd; border: 1px solid #bee5eb; padding: 15px; border-radius: 8px; font-size: 16px; }
+        .tabs { display: flex; margin-bottom: 15px; gap: 10px; }
+        .tab-btn { background: #bdc3c7; color: #333; flex: 1; }
+        .tab-btn.active { background: #34495e; color: white; }
+        .chat-box { background: #2c3e50; color: white; padding: 15px; border-radius: 12px; margin-top: 20px; display: none; }
+        .chat-messages { height: 200px; overflow-y: auto; background: #34495e; border-radius: 6px; padding: 10px; margin-bottom: 10px; }
+        .msg { margin-bottom: 10px; padding: 6px 10px; border-radius: 6px; background: #16a085; width: max-content; max-width: 80%; }
+        .msg.worker { background: #2980b9; margin-left: auto; }
+        .chat-input-group { display: flex; gap: 10px; }
+        .chat-input-group input { margin: 0; color: #333; }
+        .link-forgot { color: #e74c3c; text-decoration: none; font-size: 14px; display: block; margin-top: 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🥷 Анонимная Биржа Заданий</h1>
+    <p style="color: #7f8c8d;">Учителя никогда не узнают. Полная анонимность гарантирована.</p>
+
+    <!-- Вход и Регистрация -->
+    <div class="card">
+        <h2>Логин / Профиль</h2>
+        <div id="auth-section"></div>
+
+        <!-- Обновленное окно восстановления пароля с новым полем ввода логина -->
+        <div id="forgot-section" style="display: none; margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 15px;">
+            <h3>Восстановление доступа (Двойная защита)</h3>
+            <div id="forgot-step1">
+                <input type="text" id="forgot-user-login" placeholder="Введите ваш секретный логин аккаунта">
+                <input type="text" id="forgot-email" placeholder="Введите ваш Email, указанный при регистрации">
+                <button onclick="requestResetCode()">Получить код сброса</button>
+            </div>
+            <div id="forgot-step2" style="display: none;">
+                <input type="text" id="forgot-code" placeholder="Введите 6-значный код восстановления">
+                <input type="password" id="forgot-new-password" placeholder="Придумайте новый надежный пароль">
+                <button onclick="submitNewPassword()" style="background: #2ecc71;">Изменить пароль и войти</button>
+            </div>
+            <a onclick="toggleForgotBlock(false)" class="link-forgot" style="color: #7f8c8d;">Вернуться назад к окну входа</a>
+        </div>
+
+        <!-- Профиль пользователя -->
+        <div id="profile-section" class="user-info" style="display: none;">
+            <p><strong>Ваш публичный ник:</strong> <span id="user-name"></span></p>
+            <p><strong>Ваш ID на сайте:</strong> <span id="user-id"></span></p>
+            <p><strong>Ваш баланс:</strong> <span id="user-balance"></span> руб.</p>
+            <button onclick="logout()" style="background: #e74c3c; font-size: 12px; padding: 5px 10px; margin-top: 5px;">Выйти из аккаунта</button>
+        </div>
+    </div>
+
+    <!-- Создание новой задачи -->
+    <div class="card" id="create-task-section" style="display: none;">
+        <h2>Создать новое задание</h2>
+        <label>Название задания:</label>
+        <input type="text" id="task-title" placeholder="Например: Algebra, 9 класс, №5">
+        <label>Описание задания:</label>
+        <textarea id="task-desc" rows="3" placeholder="Опишите задачу подробно или вставьте ссылку на файлы..."></textarea>
+        <label>Бюджет (руб, минимум 50):</label>
+        <input type="number" id="task-price" value="100" min="50">
+        <button onclick="createTask()">Опубликовать задание</button>
+    </div>
+
+    <!-- Списки -->
+    <div class="card" id="tasks-section" style="display: none;">
+        <h2>📋 Задания сайта</h2>
+        <div class="tabs">
+            <button id="tab-all" class="tab-btn active" onclick="switchTab('all')">🎒 Общая лента</button>
+            <button id="tab-created" class="tab-btn" onclick="switchTab('created')">📤 Я заказал</button>
+            <button id="tab-jobs" class="tab-btn" onclick="switchTab('jobs')">🛠️ Я выполняю</button>
+        </div>
+        <div id="tasks-container"></div>
+    </div>
+
+    <!-- Чат -->
+    <div class="card chat-box" id="chat-section">
+        <h3 id="chat-title">💬 Анонимный чат задания</h3>
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input-group">
+            <input type="text" id="chat-input" placeholder="Введите сообщение или ссылку на ответ...">
+            <button onclick="sendMessage()" style="background: #2ecc71;">Отправить</button>
+        </div>
+    </div>
+</div>
+<script>
+    var SERVER_URL = 'http://127.0.0.1:8080';
+    var currentUserId = null;
+    var currentTab = 'all';
+    var activeTaskId = null;
+    var chatInterval = null;
+    var loadedMessagesCount = 0;
+
+    window.onload = async function() {
+        var savedId = sessionStorage.getItem('anon_user_id');
+        var savedName = sessionStorage.getItem('anon_user_name');
+
+        setupLoginFormHTML();
+
+        if (savedId && savedName) {
+            currentUserId = parseInt(savedId);
+            document.getElementById('auth-section').style.display = 'none';
+            document.getElementById('profile-section').style.display = 'block';
+            document.getElementById('create-task-section').style.display = 'block';
+            document.getElementById('tasks-section').style.display = 'block';
+
+            document.getElementById('user-name').innerText = savedName;
+            document.getElementById('user-id').innerText = savedId;
+
+            await updateBalanceOnScreen();
+            loadTasks();
+        }
+    };
+
+    function setupLoginFormHTML() {
+        var authBlock = document.getElementById('auth-section');
+        authBlock.innerHTML = '';
+
+        var inputLogin = document.createElement('input');
+        inputLogin.id = 'auth-login';
+        inputLogin.type = 'text';
+        inputLogin.placeholder = 'Секретный логин (от 3 символов)';
+
+        var inputPass = document.createElement('input');
+        inputPass.id = 'auth-password';
+        inputPass.type = 'password';
+        inputPass.placeholder = 'Секретный пароль (от 4 символов)';
+
+        var inputEmail = document.createElement('input');
+        inputEmail.id = 'auth-email';
+        inputEmail.type = 'email';
+        inputEmail.placeholder = 'Ваш Email (нужен только для восстановления пароля)';
+
+        var btnIn = document.createElement('button');
+        btnIn.innerText = 'Войти в аккаунт';
+        btnIn.style.marginRight = '10px';
+        btnIn.onclick = function() { handleAuth('login'); };
+
+        var btnReg = document.createElement('button');
+        btnReg.innerText = 'Создать аккаунт';
+        btnReg.style.background = '#2ecc71';
+        btnReg.onclick = function() { handleAuth('register'); };
+
+        var linkForgot = document.createElement('a');
+        linkForgot.className = 'link-forgot';
+        linkForgot.innerText = 'Забыли пароль? Восстановить доступ';
+        linkForgot.onclick = function() { toggleForgotBlock(true); };
+
+        authBlock.appendChild(inputLogin);
+        authBlock.appendChild(inputPass);
+        authBlock.appendChild(inputEmail);
+        authBlock.appendChild(btnIn);
+        authBlock.appendChild(btnReg);
+        authBlock.appendChild(linkForgot);
+    }
+
+    async function updateBalanceOnScreen() {
+        if (!currentUserId) return;
+        var response = await fetch(SERVER_URL + '/api/users/' + currentUserId + '/balance');
+        if (!response.ok) { logout(); return; }
+        var data = await response.json();
+        document.getElementById('user-balance').innerText = data.balance;
+    }
+
+    async function handleAuth(type) {
+        var loginVal = document.getElementById('auth-login').value.trim();
+        var passVal = document.getElementById('auth-password').value.trim();
+        var emailVal = document.getElementById('auth-email').value.trim();
+
+        if (loginVal.length < 3 || passVal.length < 4) {
+            alert('Слишком короткий логин или пароль!');
+            return;
+        }
+
+        if (type === 'register' && emailVal.length < 5) {
+            alert('Пожалуйста, укажите корректный Email для регистрации!');
+            return;
+        }
+
+        var endpoint = type === 'register' ? '/api/register' : '/api/login';
+        var sendData = type === 'register'
+            ? { login: loginVal, password: passVal, email: emailVal }
+            : { login: loginVal, password: passVal };
+
+        var response = await fetch(SERVER_URL + endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(sendData)
+        });
+
+        var data = await response.json();
+
+        if (response.ok) {
+            currentUserId = data.user.id;
+            document.getElementById('user-name').innerText = data.user.username;
+            document.getElementById('user-id').innerText = data.user.id;
+
+            sessionStorage.setItem('anon_user_id', data.user.id);
+            sessionStorage.setItem('anon_user_name', data.user.username);
+
+            document.getElementById('auth-section').style.display = 'none';
+            document.getElementById('profile-section').style.display = 'block';
+            document.getElementById('create-task-section').style.display = 'block';
+            document.getElementById('tasks-section').style.display = 'block';
+
+            await updateBalanceOnScreen();
+            loadTasks();
+            alert(data.message);
+        } else {
+            alert('Ошибка: ' + data.detail);
+        }
+    }
+
+    function logout() {
+        sessionStorage.clear();
+        location.reload();
+    }
+
+    function toggleForgotBlock(show) {
+        document.getElementById('auth-section').style.display = show ? 'none' : 'block';
+        document.getElementById('forgot-section').style.display = show ? 'block' : 'none';
+    }
+
+    function switchTab(tabName) {
+        currentTab = tabName;
+        document.getElementById('tab-all').classList.remove('active');
+        document.getElementById('tab-created').classList.remove('active');
+        document.getElementById('tab-jobs').classList.remove('active');
+        document.getElementById('tab-' + tabName).classList.add('active');
+        document.getElementById('chat-section').style.display = 'none';
+        clearInterval(chatInterval);
+        loadTasks();
+    }
+    // 1. ЗАПРОС КОДА ВОССТАНОВЛЕНИЯ (ОБНОВЛЕНО: ЛОГИН + EMAIL)
+    async function requestResetCode() {
+        var loginVal = document.getElementById('forgot-user-login').value.trim();
+        var emailVal = document.getElementById('forgot-email').value.trim();
+
+        if (loginVal.length < 3 || emailVal.length < 5) {
+            alert('Заполните логин (от 3 символов) и корректный Email!');
+            return;
+        }
+
+        var response = await fetch(SERVER_URL + '/api/forgot-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ login: loginVal, email: emailVal })
+        });
+
+        var data = await response.json();
+        alert(data.message);
+
+        // Показываем поля для ввода полученного кода и нового пароля
+        document.getElementById('forgot-step1').style.display = 'none';
+        document.getElementById('forgot-step2').style.display = 'block';
+    }
+
+    // 2. ОТПРАВКА НОВОГО ПАРОЛЯ И КОДА СБРОСА
+    async function submitNewPassword() {
+        var emailVal = document.getElementById('forgot-email').value.trim();
+        var codeVal = document.getElementById('forgot-code').value.trim();
+        var newPassVal = document.getElementById('forgot-new-password').value.trim();
+
+        if (codeVal.length < 5 || newPassVal.length < 4) {
+            alert('Введите код подтверждения и новый пароль (от 4 символов)!');
+            return;
+        }
+
+        var response = await fetch(SERVER_URL + '/api/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: emailVal, code: codeVal, new_password: newPassVal })
+        });
+
+        var data = await response.json();
+        if (response.ok) {
+            alert(data.message);
+            toggleForgotBlock(false); // Возвращаем форму к окну входа
+            document.getElementById('forgot-step1').style.display = 'block';
+            document.getElementById('forgot-step2').style.display = 'none';
+            document.getElementById('forgot-user-login').value = '';
+            document.getElementById('forgot-email').value = '';
+            document.getElementById('forgot-code').value = '';
+            document.getElementById('forgot-new-password').value = '';
+        } else {
+            alert('Ошибка: ' + data.detail);
+        }
+    }
+
+    async function loadTasks() {
+        if (!currentUserId) return;
+        await updateBalanceOnScreen();
+
+        var url = SERVER_URL + '/api/tasks';
+        if (currentTab === 'created') url = SERVER_URL + '/api/tasks/my-created/' + currentUserId;
+        if (currentTab === 'jobs') url = SERVER_URL + '/api/tasks/my-jobs/' + currentUserId;
+
+        var response = await fetch(url);
+        var tasks = await response.json();
+        var container = document.getElementById('tasks-container');
+        container.innerHTML = '';
+
+        if (tasks.length === 0) {
+            var noDataMsg = document.createElement('p');
+            noDataMsg.style.color = '#95a5a6';
+            noDataMsg.innerText = 'В этом разделе пока ничего нет.';
+            container.appendChild(noDataMsg);
+            return;
+        }
+
+        tasks.forEach(function(task) {
+            var item = document.createElement('div');
+            item.className = 'task-item';
+
+            if (currentTab === 'all') {
+                var btnTake = document.createElement('button');
+                btnTake.className = 'btn-take';
+                btnTake.innerText = 'Взять в работу';
+                btnTake.onclick = function() { takeTask(task.id); };
+                item.appendChild(btnTake);
+            } else if (currentTab === 'created') {
+                if (task.status === 'в работе') {
+                    var btnComplete = document.createElement('button');
+                    btnComplete.className = 'btn-complete';
+                    btnComplete.innerText = 'Подтвердить';
+                    btnComplete.onclick = function() { completeTask(task.id); };
+                    item.appendChild(btnComplete);
+
+                    var btnChat = document.createElement('button');
+                    btnChat.className = 'btn-chat';
+                    btnChat.innerText = 'Чат';
+                    btnChat.onclick = function() { openChat(task.id, task.title); };
+                    item.appendChild(btnChat);
+                } else {
+                    var statusTag = document.createElement('span');
+                    statusTag.className = 'status-tag';
+                    statusTag.innerText = task.status.toUpperCase();
+                    item.appendChild(statusTag);
+                }
+            } else if (currentTab === 'jobs') {
+                var btnOpenChat = document.createElement('button');
+                btnOpenChat.className = 'btn-chat';
+                btnOpenChat.innerText = 'Открыть чат';
+                btnOpenChat.onclick = function() { openChat(task.id, task.title); };
+                item.appendChild(btnOpenChat);
+            }
+
+            var h3 = document.createElement('h3');
+            h3.innerText = task.title;
+            item.appendChild(h3);
+
+            var pDesc = document.createElement('p');
+            pDesc.innerText = task.description;
+            item.appendChild(pDesc);
+
+            var pAuthor = document.createElement('p');
+            var smallAuthor = document.createElement('small');
+            smallAuthor.innerText = 'Автор: 👥 ' + task.student_name;
+            pAuthor.appendChild(smallAuthor);
+            item.appendChild(pAuthor);
+
+            var priceDiv = document.createElement('div');
+            priceDiv.className = 'price-tag';
+            priceDiv.innerText = 'Бюджет: ' + task.full_price + ' руб.';
+            item.appendChild(priceDiv);
+
+            container.appendChild(item);
+        });
+    }
+
+    function openChat(taskId, taskTitle) {
+        activeTaskId = taskId;
+        document.getElementById('chat-title').innerText = '💬 Анонимный чат по задаче: "' + taskTitle + '"';
+        document.getElementById('chat-section').style.display = 'block';
+
+        var container = document.getElementById('chat-messages');
+        container.innerHTML = '';
+        loadedMessagesCount = 0;
+
+        loadMessages();
+        clearInterval(chatInterval);
+        chatInterval = setInterval(loadMessages, 3000);
+    }
+
+    async function loadMessages() {
+        if (!activeTaskId) return;
+        var response = await fetch(SERVER_URL + '/api/tasks/' + activeTaskId + '/messages?user_id=' + currentUserId);
+        if (!response.ok) return;
+
+        var messages = await response.json();
+        var container = document.getElementById('chat-messages');
+
+        if (messages.length === loadedMessagesCount) return;
+
+        var newMessages = messages.slice(loadedMessagesCount);
+
+        newMessages.forEach(function(msg) {
+            var div = document.createElement('div');
+            var isWorker = msg.role.indexOf('Исполнитель') !== -1;
+            div.className = 'msg ' + (isWorker ? 'worker' : '');
+
+            var textWithLinks = msg.text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color: #fff; font-weight: bold;">$1</a>');
+            div.innerHTML = '<strong>' + msg.role + ':</strong> ' + textWithLinks;
+            container.appendChild(div);
+        });
+
+        loadedMessagesCount = messages.length;
+        container.scrollTop = container.scrollHeight;
+    }
+
+    async function sendMessage() {
+        var input = document.getElementById('chat-input');
+        var text = input.value.trim();
+        if (!text || !activeTaskId) return;
+
+        var response = await fetch(SERVER_URL + '/api/tasks/' + activeTaskId + '/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sender_id: currentUserId, text: text })
+        });
+
+        if (response.ok) {
+            input.value = '';
+            loadMessages();
+        }
+    }
+
+    async function createTask() {
+        var title = document.getElementById('task-title').value;
+        var description = document.getElementById('task-desc').value;
+        var price = parseFloat(document.getElementById('task-price').value);
+        if (!title || !description) { alert('Заполните все поля!'); return; }
+
+        var response = await fetch(SERVER_URL + '/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ student_id: currentUserId, title: title, description: description, price: price })
+        });
+
+        if (response.ok) {
+            document.getElementById('task-title').value = '';
+            document.getElementById('task-desc').value = '';
+            switchTab('created');
+        }
+    }
+
+    async function takeTask(taskId) {
+        var response = await fetch(SERVER_URL + '/api/tasks/' + taskId + '/take?worker_id=' + currentUserId, { method: 'POST' });
+        if (response.ok) {
+            alert('Вы успешно взяли задание!');
+            switchTab('jobs');
+        } else {
+            var data = await response.json();
+            alert('Ошибка: ' + data.detail);
+        }
+    }
+
+    async function completeTask(taskId) {
+        if (!confirm('Вы уверены, что всё решено верно? Деньги уйдут исполнителю.')) return;
+        var response = await fetch(SERVER_URL + '/api/tasks/' + taskId + '/complete?student_id=' + currentUserId, { method: 'POST' });
+        if (response.ok) {
+            alert('Сделка завершена!');
+            switchTab('created');
+        }
+    }
+</script>
+</body>
+</html>
