@@ -131,7 +131,7 @@ def register_user(auth_data: UserRegister):
         conn.close()
         raise HTTPException(status_code=400, detail="Пользователь с такой почтой уже есть!")
     cursor.execute("SELECT COUNT(*) FROM users")
-    count = cursor.fetchone()
+    count = cursor.fetchone()[0]
     user_id = 100000 + count + 1
     anonymous_name = f"Школьник #{random.randint(100000, 999999)}"
     cursor.execute(
@@ -162,29 +162,24 @@ def forgot_password(data: ForgotPassword):
     user = cursor.fetchone()
     if not user:
         conn.close()
-        return {"message": "Если данные верны, код восстановления отправлен на вашу почту!"}
-        
+        return {"message": "If valid, the recovery code has been sent!"}
     student_username = user[0]
     secret_code = str(random.randint(100000, 999999))
     cursor.execute("UPDATE users SET reset_code = ? WHERE login = ? AND email = ?", (secret_code, data.login, data.email))
     conn.commit()
     conn.close()
-    
     subject = "🥷 Восстановление доступа | Анонимная Биржа"
-    body = f"Привет, {student_username}!\n\nТвой секретный код подтверждения для сброса пароля: {secret_code}\n\nВведи его на сайте."
-    
+    body = f"Привет, {student_username}!\nТвой код подтверждения: {secret_code}"
     msg = MIMEText(body, 'plain', 'utf-8')
     msg['Subject'] = Header(subject, 'utf-8')
     msg['From'] = SENDER_EMAIL
     msg['To'] = data.email
-    
     try:
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
             server.login(SENDER_EMAIL, SENDER_PASSWORD)
             server.sendmail(SENDER_EMAIL, [data.email], msg.as_string())
     except Exception as e:
-        print(f"Ошибка SMTP: {e}")
-    
+        print(f"SMTP error: {e}")
     return {"message": "Код восстановления отправлен на вашу почту!"}
 
 @app.post("/api/reset-password", tags=["Пользователи"])
@@ -200,6 +195,7 @@ def reset_password(data: ResetPassword):
     conn.commit()
     conn.close()
     return {"message": "Пароль успешно изменен! Теперь вы можете войти."}
+
 
 @app.post("/api/tasks", tags=["Задания"])
 def create_task(task_data: TaskCreate):
@@ -222,7 +218,11 @@ def create_task(task_data: TaskCreate):
         INSERT INTO tasks (student_id, student_name, title, description, full_price, commission, worker_earnings, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'открыто')
     ''', (task_data.student_id, student_name, task_data.title, task_data.description, task_data.price, commission, worker_earnings))
-    conn.commit()@app.get("/api/tasks")
+    conn.commit()
+    conn.close()
+    return {"message": "Задание создано!"}
+
+@app.get("/api/tasks")
 def get_tasks():
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
@@ -242,16 +242,12 @@ def take_task(task_id: int, worker_id: int):
         raise HTTPException(status_code=404, detail="Исполнитель не найден")
     cursor.execute("SELECT student_id, status FROM tasks WHERE id = ?", (task_id,))
     task = cursor.fetchone()
-    if not task:
+    if not task or task[1] != "открыто":
         conn.close()
-        raise HTTPException(status_code=404, detail="Задание не найдено")
-    task_student_id, task_status = task
-    if task_status != "открыто":
+        raise HTTPException(status_code=400, detail="Задание недоступно")
+    if task[0] == worker_id:
         conn.close()
-        raise HTTPException(status_code=400, detail="Это задание уже выполняется")
-    if task_student_id == worker_id:
-        conn.close()
-        raise HTTPException(status_code=400, detail="Вы не можете взять свое собственное задание")
+        raise HTTPException(status_code=400, detail="Вы не можете взять свое задание")
     cursor.execute("UPDATE tasks SET worker_id = ?, status = 'в работе' WHERE id = ?", (worker_id, task_id))
     conn.commit()
     conn.close()
@@ -263,18 +259,11 @@ def complete_task(task_id: int, student_id: int):
     cursor = conn.cursor()
     cursor.execute("SELECT student_id, worker_id, commission, worker_earnings, status FROM tasks WHERE id = ?", (task_id,))
     task = cursor.fetchone()
-    if not task:
+    if not task or task[0] != student_id or task[4] != "в работе":
         conn.close()
-        raise HTTPException(status_code=404, detail="Задание не найдено")
-    task_student_id, task_worker_id, commission, worker_earnings, task_status = task
-    if task_student_id != student_id:
-        conn.close()
-        raise HTTPException(status_code=403, detail="Только создатель задания может подтвердить его выполнение")
-    if task_status != "в работе":
-        conn.close()
-        raise HTTPException(status_code=400, detail="Задание должно быть в статусе 'в работе'")
-    cursor.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (worker_earnings, task_worker_id))
-    cursor.execute("UPDATE site_earnings SET amount = amount + ? WHERE id = 1", (commission,))
+        raise HTTPException(status_code=400, detail="Ошибка завершения задания")
+    cursor.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (task[3], task[1]))
+    cursor.execute("UPDATE site_earnings SET amount = amount + ? WHERE id = 1", (task[2],))
     cursor.execute("UPDATE tasks SET status = 'выполнено' WHERE id = ?", (task_id,))
     conn.commit()
     conn.close()
@@ -284,11 +273,6 @@ def complete_task(task_id: int, student_id: int):
 def send_message(task_id: int, msg: MessageSend):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute("SELECT student_id, worker_id FROM tasks WHERE id = ?", (task_id,))
-    task = cursor.fetchone()
-    if not task:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Задание не найдено")
     cursor.execute("INSERT INTO messages (task_id, sender_id, text) VALUES (?, ?, ?)", (task_id, msg.sender_id, msg.text))
     conn.commit()
     conn.close()
@@ -300,17 +284,13 @@ def get_messages(task_id: int, user_id: int):
     cursor = conn.cursor()
     cursor.execute("SELECT student_id, worker_id FROM tasks WHERE id = ?", (task_id,))
     task = cursor.fetchone()
-    if not task:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Задание не найдено")
     cursor.execute("SELECT sender_id, text, timestamp FROM messages WHERE task_id = ? ORDER BY id ASC", (task_id,))
     rows = cursor.fetchall()
     conn.close()
     chat_history = []
     for row in rows:
-        sender_id, text, timestamp = row
-        role = "🥷 Заказчик" if sender_id == task[0] else "🛠️ Исполнитель"
-        chat_history.append({"role": role, "text": text, "time": timestamp})
+        role = "🥷 Заказчик" if row[0] == task[0] else "🛠️ Исполнитель"
+        chat_history.append({"role": role, "text": row[1], "time": row[2]})
     return chat_history
 
 @app.get("/api/tasks/my-created/{user_id}")
@@ -339,18 +319,12 @@ def get_user_balance(user_id: int):
     cursor = conn.cursor()
     cursor.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
     res = cursor.fetchone()
-    if not res:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
-    user_balance = res[0]
     conn.close()
-    return {"balance": user_balance, "admin_earnings": 0}
+    return {"balance": res[0] if res else 0, "admin_earnings": 0}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8080)
+    uvicorn.run(app, host="0.0.0.0", port=8080)
 
-    conn.close()
-    return {"message": "Задание создано!"}
 
 
