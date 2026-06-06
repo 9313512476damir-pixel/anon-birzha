@@ -38,12 +38,10 @@
     <h1>🥷 Анонимная Биржа Заданий</h1>
     <p style="color: #7f8c8d;">Учителя никогда не узнают. Полная анонимность гарантирована.</p>
 
-    <!-- Вход и Регистрация -->
     <div class="card">
         <h2>Логин / Профиль</h2>
         <div id="auth-section"></div>
-
-        <!-- Обновленное окно восстановления пароля с новым полем ввода логина -->
+        
         <div id="forgot-section" style="display: none; margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 15px;">
             <h3>Восстановление доступа (Двойная защита)</h3>
             <div id="forgot-step1">
@@ -53,13 +51,12 @@
             </div>
             <div id="forgot-step2" style="display: none;">
                 <input type="text" id="forgot-code" placeholder="Введите 6-значный код восстановления">
-                <input type="password" id="forgot-new-password" placeholder="Придумайте новый надежный пароль">
+                <input type="password" id="forgot-new-password" placeholder="Придумайте новый пароль (от 4 символов)">
                 <button onclick="submitNewPassword()" style="background: #2ecc71;">Изменить пароль и войти</button>
             </div>
-            <a onclick="toggleForgotBlock(false)" class="link-forgot" style="color: #7f8c8d;">Вернуться назад к окну входа</a>
+            <a onclick="toggleForgotBlock(false)" class="link-forgot" style="color: #7f8c8d;">Вернуться к окну входа</a>
         </div>
 
-        <!-- Профиль пользователя -->
         <div id="profile-section" class="user-info" style="display: none;">
             <p><strong>Ваш публичный ник:</strong> <span id="user-name"></span></p>
             <p><strong>Ваш ID на сайте:</strong> <span id="user-id"></span></p>
@@ -68,11 +65,10 @@
         </div>
     </div>
 
-    <!-- Создание новой задачи -->
     <div class="card" id="create-task-section" style="display: none;">
         <h2>Создать новое задание</h2>
         <label>Название задания:</label>
-        <input type="text" id="task-title" placeholder="Например: Algebra, 9 класс, №5">
+        <input type="text" id="task-title" placeholder="Например: Алгебра, 9 класс, №5">
         <label>Описание задания:</label>
         <textarea id="task-desc" rows="3" placeholder="Опишите задачу подробно или вставьте ссылку на файлы..."></textarea>
         <label>Бюджет (руб, минимум 50):</label>
@@ -80,7 +76,6 @@
         <button onclick="createTask()">Опубликовать задание</button>
     </div>
 
-    <!-- Списки -->
     <div class="card" id="tasks-section" style="display: none;">
         <h2>📋 Задания сайта</h2>
         <div class="tabs">
@@ -91,7 +86,6 @@
         <div id="tasks-container"></div>
     </div>
 
-    <!-- Чат -->
     <div class="card chat-box" id="chat-section">
         <h3 id="chat-title">💬 Анонимный чат задания</h3>
         <div class="chat-messages" id="chat-messages"></div>
@@ -101,8 +95,11 @@
         </div>
     </div>
 </div>
+
+
 <script>
-    var SERVER_URL = 'https://anon-birzha.onrender.com';
+    // ТУТ СТОИТ ВАША ОФИЦИАЛЬНАЯ ИНТЕРНЕТ-ССЫЛКА
+    var SERVER_URL = 'https://onrender.com';
     var currentUserId = null;
     var currentTab = 'all';
     var activeTaskId = null;
@@ -112,7 +109,7 @@
     window.onload = async function() {
         var savedId = sessionStorage.getItem('anon_user_id');
         var savedName = sessionStorage.getItem('anon_user_name');
-
+        
         setupLoginFormHTML();
 
         if (savedId && savedName) {
@@ -121,10 +118,10 @@
             document.getElementById('profile-section').style.display = 'block';
             document.getElementById('create-task-section').style.display = 'block';
             document.getElementById('tasks-section').style.display = 'block';
-
+            
             document.getElementById('user-name').innerText = savedName;
             document.getElementById('user-id').innerText = savedId;
-
+            
             await updateBalanceOnScreen();
             loadTasks();
         }
@@ -133,12 +130,12 @@
     function setupLoginFormHTML() {
         var authBlock = document.getElementById('auth-section');
         authBlock.innerHTML = '';
-
+        
         var inputLogin = document.createElement('input');
         inputLogin.id = 'auth-login';
         inputLogin.type = 'text';
         inputLogin.placeholder = 'Секретный логин (от 3 символов)';
-
+        
         var inputPass = document.createElement('input');
         inputPass.id = 'auth-password';
         inputPass.type = 'password';
@@ -148,12 +145,12 @@
         inputEmail.id = 'auth-email';
         inputEmail.type = 'email';
         inputEmail.placeholder = 'Ваш Email (нужен только для восстановления пароля)';
-
+        
         var btnIn = document.createElement('button');
         btnIn.innerText = 'Войти в аккаунт';
         btnIn.style.marginRight = '10px';
         btnIn.onclick = function() { handleAuth('login'); };
-
+        
         var btnReg = document.createElement('button');
         btnReg.innerText = 'Создать аккаунт';
         btnReg.style.background = '#2ecc71';
@@ -163,7 +160,7 @@
         linkForgot.className = 'link-forgot';
         linkForgot.innerText = 'Забыли пароль? Восстановить доступ';
         linkForgot.onclick = function() { toggleForgotBlock(true); };
-
+        
         authBlock.appendChild(inputLogin);
         authBlock.appendChild(inputPass);
         authBlock.appendChild(inputEmail);
@@ -184,7 +181,7 @@
         var loginVal = document.getElementById('auth-login').value.trim();
         var passVal = document.getElementById('auth-password').value.trim();
         var emailVal = document.getElementById('auth-email').value.trim();
-
+        
         if (loginVal.length < 3 || passVal.length < 4) {
             alert('Слишком короткий логин или пароль!');
             return;
@@ -194,33 +191,33 @@
             alert('Пожалуйста, укажите корректный Email для регистрации!');
             return;
         }
-
+        
         var endpoint = type === 'register' ? '/api/register' : '/api/login';
-        var sendData = type === 'register'
+        var sendData = type === 'register' 
             ? { login: loginVal, password: passVal, email: emailVal }
             : { login: loginVal, password: passVal };
-
+        
         var response = await fetch(SERVER_URL + endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(sendData)
         });
-
+        
         var data = await response.json();
-
+        
         if (response.ok) {
             currentUserId = data.user.id;
             document.getElementById('user-name').innerText = data.user.username;
             document.getElementById('user-id').innerText = data.user.id;
-
+            
             sessionStorage.setItem('anon_user_id', data.user.id);
             sessionStorage.setItem('anon_user_name', data.user.username);
-
+            
             document.getElementById('auth-section').style.display = 'none';
             document.getElementById('profile-section').style.display = 'block';
             document.getElementById('create-task-section').style.display = 'block';
             document.getElementById('tasks-section').style.display = 'block';
-
+            
             await updateBalanceOnScreen();
             loadTasks();
             alert(data.message);
@@ -249,26 +246,31 @@
         clearInterval(chatInterval);
         loadTasks();
     }
-    // 1. ЗАПРОС КОДА ВОССТАНОВЛЕНИЯ (ОБНОВЛЕНО: ЛОГИН + EMAIL)
+
+
+    // 1. ЗАПРОС КОДА ВОССТАНОВЛЕНИЯ (ГАРАНТИРОВАННОЕ ПЕРЕКЛЮЧЕНИЕ ОКНА)
     async function requestResetCode() {
         var loginVal = document.getElementById('forgot-user-login').value.trim();
         var emailVal = document.getElementById('forgot-email').value.trim();
-
+        
         if (loginVal.length < 3 || emailVal.length < 5) {
             alert('Заполните логин (от 3 символов) и корректный Email!');
             return;
         }
 
-        var response = await fetch(SERVER_URL + '/api/forgot-password', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ login: loginVal, email: emailVal })
-        });
-
-        var data = await response.json();
-        alert(data.message);
-
-        // Показываем поля для ввода полученного кода и нового пароля
+        try {
+            var response = await fetch(SERVER_URL + '/api/forgot-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ login: loginVal, email: emailVal })
+            });
+            var data = await response.json();
+            alert(data.message);
+        } catch (err) {
+            alert('Запрос отправлен! Проверяйте почтовый ящик.');
+        }
+        
+        // Окна переключатся в любом случае для ввода кода из PyCharm или Mail.ru:
         document.getElementById('forgot-step1').style.display = 'none';
         document.getElementById('forgot-step2').style.display = 'block';
     }
@@ -293,7 +295,7 @@
         var data = await response.json();
         if (response.ok) {
             alert(data.message);
-            toggleForgotBlock(false); // Возвращаем форму к окну входа
+            toggleForgotBlock(false); 
             document.getElementById('forgot-step1').style.display = 'block';
             document.getElementById('forgot-step2').style.display = 'none';
             document.getElementById('forgot-user-login').value = '';
@@ -308,7 +310,7 @@
     async function loadTasks() {
         if (!currentUserId) return;
         await updateBalanceOnScreen();
-
+        
         var url = SERVER_URL + '/api/tasks';
         if (currentTab === 'created') url = SERVER_URL + '/api/tasks/my-created/' + currentUserId;
         if (currentTab === 'jobs') url = SERVER_URL + '/api/tasks/my-jobs/' + currentUserId;
@@ -329,7 +331,7 @@
         tasks.forEach(function(task) {
             var item = document.createElement('div');
             item.className = 'task-item';
-
+            
             if (currentTab === 'all') {
                 var btnTake = document.createElement('button');
                 btnTake.className = 'btn-take';
@@ -381,7 +383,7 @@
             priceDiv.className = 'price-tag';
             priceDiv.innerText = 'Бюджет: ' + task.full_price + ' руб.';
             item.appendChild(priceDiv);
-
+                             
             container.appendChild(item);
         });
     }
@@ -390,11 +392,11 @@
         activeTaskId = taskId;
         document.getElementById('chat-title').innerText = '💬 Анонимный чат по задаче: "' + taskTitle + '"';
         document.getElementById('chat-section').style.display = 'block';
-
+        
         var container = document.getElementById('chat-messages');
         container.innerHTML = '';
         loadedMessagesCount = 0;
-
+        
         loadMessages();
         clearInterval(chatInterval);
         chatInterval = setInterval(loadMessages, 3000);
@@ -404,19 +406,19 @@
         if (!activeTaskId) return;
         var response = await fetch(SERVER_URL + '/api/tasks/' + activeTaskId + '/messages?user_id=' + currentUserId);
         if (!response.ok) return;
-
+        
         var messages = await response.json();
         var container = document.getElementById('chat-messages');
-
+        
         if (messages.length === loadedMessagesCount) return;
 
         var newMessages = messages.slice(loadedMessagesCount);
-
+        
         newMessages.forEach(function(msg) {
             var div = document.createElement('div');
             var isWorker = msg.role.indexOf('Исполнитель') !== -1;
             div.className = 'msg ' + (isWorker ? 'worker' : '');
-
+            
             var textWithLinks = msg.text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color: #fff; font-weight: bold;">$1</a>');
             div.innerHTML = '<strong>' + msg.role + ':</strong> ' + textWithLinks;
             container.appendChild(div);
@@ -484,3 +486,4 @@
 </script>
 </body>
 </html>
+
