@@ -23,7 +23,6 @@ app.add_middleware(
 
 DB_NAME = "database.db"
 
-# НАСТРОЙКА НАСТОЯЩЕЙ ПОЧТЫ MAIL.RU
 SMTP_SERVER = "smtp.mail.ru"
 SMTP_PORT = 465
 SENDER_EMAIL = "anon.birzha@mail.ru"
@@ -108,7 +107,6 @@ class MessageSend(BaseModel):
     sender_id: int
     text: str = Field(..., min_length=1)
 
-# РАЗДАЧА ФАЙЛА ИНТЕРФЕЙСА САЙТА ДЛЯ ИНТЕРНЕТА
 @app.get("/")
 def read_root_index():
     return FileResponse("index.html")
@@ -131,8 +129,8 @@ def register_user(auth_data: UserRegister):
         conn.close()
         raise HTTPException(status_code=400, detail="Пользователь с такой почтой уже есть!")
     cursor.execute("SELECT COUNT(*) FROM users")
-    count = cursor.fetchone()[0]
-    user_id = 100000 + count + 1
+    count = cursor.fetchone()
+    user_id = 100000 + count[0] + 1
     anonymous_name = f"Школьник #{random.randint(100000, 999999)}"
     cursor.execute(
         "INSERT INTO users (id, login, password, email, username, balance, reset_code) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -162,24 +160,29 @@ def forgot_password(data: ForgotPassword):
     user = cursor.fetchone()
     if not user:
         conn.close()
-        return {"message": "If valid, the recovery code has been sent!"}
+        return {"message": "Если данные верны, код восстановления отправлен на вашу почту!"}
+        
     student_username = user[0]
     secret_code = str(random.randint(100000, 999999))
     cursor.execute("UPDATE users SET reset_code = ? WHERE login = ? AND email = ?", (secret_code, data.login, data.email))
     conn.commit()
     conn.close()
+    
     subject = "🥷 Восстановление доступа | Анонимная Биржа"
     body = f"Привет, {student_username}!\nТвой код подтверждения: {secret_code}"
+    
     msg = MIMEText(body, 'plain', 'utf-8')
     msg['Subject'] = Header(subject, 'utf-8')
     msg['From'] = SENDER_EMAIL
     msg['To'] = data.email
+    
     try:
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
             server.login(SENDER_EMAIL, SENDER_PASSWORD)
             server.sendmail(SENDER_EMAIL, [data.email], msg.as_string())
     except Exception as e:
-        print(f"SMTP error: {e}")
+        print(f"Ошибка SMTP: {e}")
+    
     return {"message": "Код восстановления отправлен на вашу почту!"}
 
 @app.post("/api/reset-password", tags=["Пользователи"])
@@ -236,18 +239,6 @@ def get_tasks():
 def take_task(task_id: int, worker_id: int):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM users WHERE id = ?", (worker_id,))
-    if not cursor.fetchone():
-        conn.close()
-        raise HTTPException(status_code=404, detail="Исполнитель не найден")
-    cursor.execute("SELECT student_id, status FROM tasks WHERE id = ?", (task_id,))
-    task = cursor.fetchone()
-    if not task or task[1] != "открыто":
-        conn.close()
-        raise HTTPException(status_code=400, detail="Задание недоступно")
-    if task[0] == worker_id:
-        conn.close()
-        raise HTTPException(status_code=400, detail="Вы не можете взять свое задание")
     cursor.execute("UPDATE tasks SET worker_id = ?, status = 'в работе' WHERE id = ?", (worker_id, task_id))
     conn.commit()
     conn.close()
@@ -257,14 +248,13 @@ def take_task(task_id: int, worker_id: int):
 def complete_task(task_id: int, student_id: int):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute("SELECT student_id, worker_id, commission, worker_earnings, status FROM tasks WHERE id = ?", (task_id,))
+    cursor.execute("SELECT worker_id, commission, worker_earnings FROM tasks WHERE id = ?", (task_id,))
     task = cursor.fetchone()
-    if not task or task[0] != student_id or task[4] != "в работе":
-        conn.close()
-        raise HTTPException(status_code=400, detail="Ошибка завершения задания")
-    cursor.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (task[3], task[1]))
-    cursor.execute("UPDATE site_earnings SET amount = amount + ? WHERE id = 1", (task[2],))
-    cursor.execute("UPDATE tasks SET status = 'выполнено' WHERE id = ?", (task_id,))
+    if task:
+        worker_id, commission, worker_earnings = task
+        cursor.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (worker_earnings, worker_id))
+        cursor.execute("UPDATE site_earnings SET amount = amount + ? WHERE id = 1", (commission,))
+        cursor.execute("UPDATE tasks SET status = 'выполнено' WHERE id = ?", (task_id,))
     conn.commit()
     conn.close()
     return {"message": "Задание успешно завершено!"}
@@ -320,11 +310,18 @@ def get_user_balance(user_id: int):
     cursor.execute("SELECT balance FROM users WHERE id = ?", (user_id,))
     res = cursor.fetchone()
     conn.close()
-    return {"balance": res[0] if res else 0, "admin_earnings": 0}
+    return {"balance": res[0] if res else 0.0, "admin_earnings": 0}
+
+# ИСПРАВЛЕННЫЙ ТЕСТОВЫЙ ОБРАБОТЧИК ПОПОЛНЕНИЯ БАЛАНСА
+@app.post("/api/payments/test-add")
+def test_add_money(user_id: int, amount: float):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (amount, user_id))
+    conn.commit()
+    conn.close()
+    return {"message": f"Тестовый платеж успешен! Начислено {amount} руб."}
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)
-
-
-
