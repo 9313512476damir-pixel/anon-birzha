@@ -387,6 +387,18 @@ def get_user_balance(user_id: int):
     conn.close()
     return {"balance": user_balance, "admin_earnings": 0}
 
+# ДОПОЛНИТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ СВЯЗИ С INDEX.HTML В ИНТЕРНЕТЕ
+from fastapi.responses import FileResponse
+
+@app.get("/", tags=["Сайт"])
+def read_index():
+    return FileResponse("index.html")
+
+@app.get("/index.html", tags=["Сайт"])
+def read_index_html():
+    return FileResponse("index.html")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8080)
